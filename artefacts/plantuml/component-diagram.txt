@@ -1,0 +1,28 @@
+@startuml
+title System Component Diagram — docker-compose
+
+node "Docker Host" {
+  rectangle "Docker Network" {
+    component "ocr-service\n(port 7654)" as OCR
+    component "otel-collector\n(gRPC:4317, HTTP:4318)" as OTEL
+    component "prometheus\n(port 9090)" as PROM
+    component "grafana\n(port 3000)" as GRAF
+  }
+  artifact "otel.yaml (ro)" as OTEL_CFG
+  artifact "prometheus.yaml (ro)" as PROM_CFG
+  artifact "host files (/proc, /sys, /etc/os-release,\n/var/lib/docker, /run/udev/data)" as HOST_FILES
+}
+
+OCR --> OTEL : emits traces/metrics\n(OTLP http/protobuf)
+OTEL --> PROM : exports metrics to\nPrometheus OTLP endpoint
+PROM --> GRAF : supplies metrics (Prometheus datasource)
+GRAF --> PROM : queries dashboards/metrics
+
+OTEL ..> OTEL_CFG : reads /etc/otel.yaml (ro)
+OTEL ..> HOST_FILES : host mounts (ro), pid=host
+PROM ..> PROM_CFG : reads /etc/prometheus/prometheus.yaml (ro)
+
+PROM ..> OTEL : depends_on
+GRAF ..> PROM : depends_on
+
+@enduml
