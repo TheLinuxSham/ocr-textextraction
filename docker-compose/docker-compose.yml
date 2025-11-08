@@ -1,0 +1,55 @@
+services:
+  ocr-service:
+    build:
+      context: ../ocr/
+      dockerfile: Dockerfile
+    ports:
+      - "7654:7654"
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.126.0
+    ports:
+      - "4317:4317" # gRPC
+      - "4318:4318" # HTTP
+    volumes:
+      - ./otel.yaml:/etc/otel.yaml:ro # otel config location
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /var/lib/docker/:/host/var/lib/docker:ro
+      - /run/udev/data:/run/udev/data:ro
+    command: ["--config", "/etc/otel.yaml"]
+    environment:
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://localhost:9090/api/v1/otlp/v1/metrics
+      - OTEL_TRACES_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      - OTEL_METRIC_EXPORT_INTERVAL=5000
+      - OTEL_SERVICE_NAME="OTEL"
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES}
+    pid: "host" # enable collector to read process metrics
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml # otel config location
+    depends_on:
+      - otel-collector
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--web.enable-otlp-receiver" # enable prometheus as otel backend
+  grafana:
+    image: grafana/grafana:12.0.0
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin # default pw - please change
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_LOG_FILTERS: rendering:debug
+  # renderer: # is only needed if you wish to export charts from grafana
+  #   image: grafana/grafana-image-renderer:3.12.6
+  #   ports:
+  #     - "8081"
