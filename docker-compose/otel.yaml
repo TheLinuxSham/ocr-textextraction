@@ -1,0 +1,38 @@
+receivers:
+  hostmetrics: # collect hostmetrics of fastapi container
+    collection_interval: 1m
+    scrapers:
+      cpu:
+      memory:
+      load:
+        cpu_average: true
+      network:
+      system:
+  otlp: # standard config to export
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+extensions:
+  health_check: {}
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9090
+    namespace: default
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp, hostmetrics]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      exporters: [debug]
